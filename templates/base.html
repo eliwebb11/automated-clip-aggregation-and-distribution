@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ClipSlop {% block title %}{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body>
+
+  <!-- ── Sidebar ─────────────────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-icon">⬡</span>
+      <span class="logo-text">ClipSlop</span>
+    </div>
+
+    <nav class="sidebar-nav" id="sidebar-nav">
+      <a href="/" class="nav-item {% if active == 'dashboard' %}active{% endif %}" data-page="dashboard">
+        <span class="nav-icon">▦</span>
+        <span>Dashboard</span>
+      </a>
+      <a href="/clips" class="nav-item {% if active == 'clips' %}active{% endif %}" data-page="clips">
+        <span class="nav-icon">▷</span>
+        <span>Clips</span>
+      </a>
+      <a href="/queue" class="nav-item {% if active == 'queue' %}active{% endif %}" data-page="queue">
+        <span class="nav-icon">≡</span>
+        <span>Upload Queue</span>
+        <span class="nav-badge" id="queue-count">0</span>
+      </a>
+      <a href="/history" class="nav-item {% if active == 'history' %}active{% endif %}" data-page="history">
+        <span class="nav-icon">◷</span>
+        <span>History</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-platforms">
+      <p class="sidebar-section-label">Sources</p>
+      <div class="platform-pill twitch">Twitch</div>
+      <div class="platform-pill kick">Kick</div>
+      <p class="sidebar-section-label" style="margin-top:18px">Destinations</p>
+      <div class="platform-pill youtube">YouTube</div>
+      <div class="platform-pill tiktok">TikTok</div>
+      <div class="platform-pill x">X</div>
+    </div>
+
+    <a href="/settings" class="nav-item settings-link {% if active == 'settings' %}active{% endif %}" data-page="settings">
+      <span class="nav-icon">⚙</span>
+      <span>Settings</span>
+    </a>
+  </aside>
+
+  <!-- ── Main ────────────────────────────────────────────────────────────── -->
+  <main class="main">
+    <!-- Loading bar -->
+    <div id="loading-bar"></div>
+
+    <header class="topbar">
+      <div class="topbar-title" id="topbar-title">{% block page_title %}{% endblock %}</div>
+      <div class="topbar-actions" id="topbar-actions">{% block topbar_actions %}{% endblock %}</div>
+    </header>
+
+    <div class="content" id="main-content">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  {% block scripts %}{% endblock %}
+
+  <!-- ── SPA Router ─────────────────────────────────────────────────────── -->
+  <script>
+  (function() {
+    const TITLES = {
+      dashboard: 'Dashboard',
+      clips:     'Clips',
+      queue:     'Upload Queue',
+      history:   'Upload History',
+      settings:  'Settings',
+    };
+
+    function setActive(page) {
+      document.querySelectorAll('.nav-item').forEach(el => {
+        el.classList.toggle('active', el.dataset.page === page);
+      });
+    }
+
+    function showLoading() {
+      const bar = document.getElementById('loading-bar');
+      bar.style.width     = '0%';
+      bar.style.opacity   = '1';
+      bar.style.transition= 'none';
+      requestAnimationFrame(() => {
+        bar.style.transition = 'width 0.25s ease';
+        bar.style.width      = '70%';
+      });
+    }
+
+    function finishLoading() {
+      const bar = document.getElementById('loading-bar');
+      bar.style.width = '100%';
+      setTimeout(() => { bar.style.opacity = '0'; bar.style.width = '0%'; }, 250);
+    }
+
+    async function navigate(url, pushState = true) {
+      showLoading();
+      try {
+        const res = await fetch(url, {
+          headers: { 'X-Partial': '1' },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        // Swap content
+        document.getElementById('main-content').innerHTML    = data.content;
+        document.getElementById('topbar-title').textContent  = data.page_title;
+        document.getElementById('topbar-actions').innerHTML  = data.topbar_actions || '';
+
+        // Update active nav
+        setActive(data.active);
+
+        // Update browser URL + history
+        if (pushState) {
+          history.pushState({ url }, data.page_title, url);
+        }
+
+        // Re-run any inline scripts in the new content
+        document.getElementById('main-content').querySelectorAll('script').forEach(old => {
+          const s = document.createElement('script');
+          s.textContent = old.textContent;
+          old.replaceWith(s);
+        });
+
+        // Trigger page-level init if defined
+        if (typeof window.__pageInit === 'function') {
+          window.__pageInit();
+          window.__pageInit = null;
+        }
+
+        // Re-init common things
+        if (typeof refreshStats === 'function') refreshStats();
+
+        finishLoading();
+        // Scroll content to top
+        document.getElementById('main-content').scrollTop = 0;
+
+      } catch(e) {
+        finishLoading();
+        // Fall back to normal navigation on error
+        window.location.href = url;
+      }
+    }
+
+    // Intercept all nav clicks
+    document.addEventListener('click', e => {
+      const link = e.target.closest('a.nav-item');
+      if (!link) return;
+      e.preventDefault();
+      navigate(link.getAttribute('href'));
+    });
+
+    // Handle browser back/forward
+    window.addEventListener('popstate', e => {
+      if (e.state && e.state.url) {
+        navigate(e.state.url, false);
+      }
+    });
+
+    // Seed initial history state
+    history.replaceState({ url: window.location.pathname }, document.title, window.location.pathname);
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,369 @@
+{% extends "base.html" %}
+{% block title %}— Settings{% endblock %}
+{% block page_title %}Settings{% endblock %}
+{% block topbar_actions %}
+  <button class="btn btn-primary" onclick="saveSettings()">Save Changes</button>
+{% endblock %}
+
+{% block content %}
+
+
+<div class="settings-section">
+  <div class="form-row">
+    <div class="form-label">Clips per fetch</div>
+    <input class="form-input" type="number" id="max_clips_per_run"
+    value="{{ cfg.get('max_clips_per_run', '20') }}" min="1" max="1000">
+  </div>
+</div>
+<!-- Twitch -->
+ <div class="settings-section">
+  <div class="settings-section-title">🟣 Twitch</div>
+  <div class="form-row">
+    <div class="form-label">Client ID <small>From dev.twitch.tv</small></div>
+    <input class="form-input" type="password" id="twitch_client_id" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+  </div>
+  <div class="form-row">
+    <div class="form-label">Client Secret</div>
+    <input class="form-input" type="password" id="twitch_client_secret" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+  </div>
+  <div class="form-row">
+    <div class="form-label">Games to track <small>Comma-separated game names</small></div>
+    <input class="form-input" type="text" id="twitch_games"
+           value="{{ cfg.get('twitch_games', 'Just Chatting, IRL') }}">
+  </div>
+  <div class="form-row">
+    <div class="form-label">Clip Period</div>
+    <select class="form-input" id="twitch_period">
+      {% for val, label in [('day','Last 24 hours'),('week','Last 7 days'),('month','Last 30 days'),('all','All time')] %}
+      <option value="{{ val }}" {% if cfg.get('twitch_period','week') == val %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</div>
+
+<!-- Kick -->
+<div class="settings-section">
+  <div class="settings-section-title">🟢 Kick</div>
+  <div class="form-row">
+    <div class="form-label">Kick targets <small>Categories: just-chatting, slots &nbsp;|&nbsp; Streamers: @xqc, @trainwreckstv</small></div>
+    <input class="form-input" type="text" id="kick_categories"
+           value="{{ cfg.get('kick_categories', 'slots, just-chatting, irl') }}">
+  </div>
+</div>
+
+<!-- YouTube -->
+<div class="settings-section">
+  <div class="settings-section-title">🔴 YouTube Shorts</div>
+  <div class="form-row">
+    <div class="form-label">OAuth JSON <small>Path to client_secrets.json</small></div>
+    <input class="form-input" type="text" id="yt_creds_path"
+           value="{{ cfg.get('youtube_client_secrets_file', 'client_secrets.json') }}"
+           placeholder="client_secrets.json">
+  </div>
+  <div class="form-row">
+    <div class="form-label">Connection <small id="yt-status-label">Checking...</small></div>
+    <button class="btn btn-ghost" id="yt-connect-btn" onclick="connectYouTube()" style="width:fit-content">
+      Connect YouTube
+    </button>
+  </div>
+  <div class="form-row">
+    <div class="form-label">Auto-upload</div>
+    <label class="toggle">
+      <input type="checkbox" id="upload_youtube" {% if cfg.get('upload_youtube','true') == 'true' %}checked{% endif %}>
+      <span class="toggle-slider"></span>
+    </label>
+  </div>
+</div>
+
+<!-- TikTok -->
+<div class="settings-section">
+  <div class="settings-section-title">🎵 TikTok</div>
+  <div class="form-row">
+    <div class="form-label">Client Key <small>From TikTok Developer Portal</small></div>
+    <input class="form-input" type="text" id="tiktok_client_key" placeholder="aw...">
+  </div>
+  <div class="form-row">
+    <div class="form-label">Client Secret</div>
+    <input class="form-input" type="password" id="tiktok_client_secret" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+  </div>
+  <div class="form-row">
+    <div class="form-label">Connection <small id="tt-status-label">Checking...</small></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn btn-ghost" onclick="connectTikTokOAuth()" style="font-size:12px">↗ OAuth Login</button>
+      <span style="font-size:12px;color:var(--text-3)">or</span>
+      <button class="btn btn-ghost" onclick="toggleManualToken()" style="font-size:12px">Enter Token</button>
+    </div>
+  </div>
+  <div id="tt-manual-token" style="display:none">
+    <div class="form-row">
+      <div class="form-label">Access Token</div>
+      <input class="form-input" type="password" id="tiktok_access_token" placeholder="act.xxxxxxxx...">
+    </div>
+    <div class="form-row">
+      <div class="form-label">Refresh Token <small>Optional</small></div>
+      <input class="form-input" type="password" id="tiktok_refresh_token" placeholder="rft.xxxxxxxx...">
+    </div>
+    <div class="form-row">
+      <div class="form-label"></div>
+      <button class="btn btn-primary" onclick="saveTikTokToken()" style="width:fit-content;font-size:12px">Save Token</button>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-label">Auto-upload</div>
+    <label class="toggle">
+      <input type="checkbox" id="upload_tiktok" {% if cfg.get('upload_tiktok','true') == 'true' %}checked{% endif %}>
+      <span class="toggle-slider"></span>
+    </label>
+  </div>
+</div>
+
+<!-- X -->
+<div class="settings-section">
+  <div class="settings-section-title">𝕏 X (Twitter)</div>
+  <div class="form-row">
+    <div class="form-label">Connection <small id="x-status-label">Checking...</small></div>
+    <span></span>
+  </div>
+  <div class="form-row">
+    <div class="form-label">API Key</div>
+    <input class="form-input" type="password" id="x_api_key" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+  </div>
+  <div class="form-row">
+    <div class="form-label">API Secret</div>
+    <input class="form-input" type="password" id="x_api_secret" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+  </div>
+  <div class="form-row">
+    <div class="form-label">Access Token</div>
+    <input class="form-input" type="password" id="x_access_token" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+  </div>
+  <div class="form-row">
+    <div class="form-label">Access Token Secret</div>
+    <input class="form-input" type="password" id="x_access_secret" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+  </div>
+  <div class="form-row">
+    <div class="form-label">Auto-upload</div>
+    <label class="toggle">
+      <input type="checkbox" id="upload_twitter" {% if cfg.get('upload_twitter','true') == 'true' %}checked{% endif %}>
+      <span class="toggle-slider"></span>
+    </label>
+  </div>
+</div>
+
+<!-- Scheduler -->
+<div class="settings-section">
+  <div class="settings-section-title">⏱ Auto Scheduler</div>
+  <div class="form-row">
+    <div class="form-label">Status <small id="sched-status-label">Checking...</small></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="startScheduler()" style="font-size:12px">▶ Start</button>
+      <button class="btn btn-danger"  onclick="stopScheduler()"  style="font-size:12px">■ Stop</button>
+      <button class="btn btn-ghost"   onclick="runNow()"         style="font-size:12px">⚡ Run Now</button>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-label">Interval</div>
+    <select class="form-input" id="schedule_hours" style="max-width:200px">
+      <option value="1">Every hour</option>
+      <option value="3">Every 3 hours</option>
+      <option value="6" selected>Every 6 hours</option>
+      <option value="12">Every 12 hours</option>
+      <option value="24">Once a day</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <div class="form-label">Next run</div>
+    <span id="sched-next-run" style="font-size:13px;color:var(--text-2);font-family:var(--mono)">—</span>
+  </div>
+</div>
+
+<!-- Upload Template -->
+<div class="settings-section">
+  <div class="settings-section-title">📝 Upload Template</div>
+  <div class="form-row">
+    <div class="form-label">Title template <small>Variables: {title} {streamer} {game}</small></div>
+    <input class="form-input" type="text" id="clip_title_template"
+           value="{{ cfg.get('clip_title_template', '{title} | {streamer} #Shorts #Gaming') }}">
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function saveSettings() {
+  const payload = {
+    // Pipeline settings
+    twitch_games:        document.getElementById('twitch_games').value,
+    kick_categories:     document.getElementById('kick_categories').value,
+    twitch_period:       document.getElementById('twitch_period').value,
+    max_clips_per_run:   document.getElementById('max_clips_per_run').value,
+    upload_youtube:      document.getElementById('upload_youtube').checked  ? 'true' : 'false',
+    upload_tiktok:       document.getElementById('upload_tiktok').checked   ? 'true' : 'false',
+    upload_twitter:      document.getElementById('upload_twitter').checked  ? 'true' : 'false',
+    clip_title_template: document.getElementById('clip_title_template').value,
+    // API keys (only sent if filled in)
+    twitch_client_id:     document.getElementById('twitch_client_id').value.trim(),
+    twitch_client_secret: document.getElementById('twitch_client_secret').value.trim(),
+    // X keys
+    api_key:              document.getElementById('x_api_key').value.trim(),
+    api_secret:           document.getElementById('x_api_secret').value.trim(),
+    access_token:         document.getElementById('x_access_token').value.trim(),
+    access_token_secret:  document.getElementById('x_access_secret').value.trim(),
+  };
+
+  // Save X keys separately if provided
+  const xFilled = payload.api_key && payload.api_secret && payload.access_token && payload.access_token_secret;
+  if (xFilled) {
+    const xRes  = await fetch('/api/auth/x/save', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        api_key: payload.api_key, api_secret: payload.api_secret,
+        access_token: payload.access_token, access_token_secret: payload.access_token_secret,
+      }),
+    });
+    const xData = await xRes.json();
+    if (xData.success) {
+      ['x_api_key','x_api_secret','x_access_token','x_access_secret'].forEach(id => document.getElementById(id).value = '');
+      checkXStatus();
+    }
+  }
+
+  const res  = await fetch('/api/save-settings', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (data.success) {
+    showToast('✓ Settings saved', 'success');
+    // Clear key fields after saving
+    ['twitch_client_id','twitch_client_secret','kick_client_id','kick_client_secret'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    checkKickStatus();
+  } else {
+    showToast('Error: ' + data.error, 'error');
+  }
+}
+
+// ── YouTube ───────────────────────────────────────────────────────────────────
+async function checkYouTubeStatus() {
+  try {
+    const res  = await fetch('/api/auth/youtube/status');
+    const data = await res.json();
+    const label = document.getElementById('yt-status-label');
+    const btn   = document.getElementById('yt-connect-btn');
+    if (label) { label.textContent = data.authenticated ? '✓ Connected' : 'Not connected'; label.style.color = data.authenticated ? 'var(--kick)' : ''; }
+    if (btn)   { btn.textContent = data.authenticated ? '✓ Reconnect' : 'Connect YouTube'; }
+  } catch(e) {}
+}
+
+async function connectYouTube() {
+  const btn = document.getElementById('yt-connect-btn');
+  btn.disabled = true; btn.textContent = '⏳ Opening browser...';
+  showToast('Opening YouTube login in your browser...', 'info');
+  try {
+    const res  = await fetch('/api/auth/youtube', {method:'POST'});
+    const data = await res.json();
+    if (data.success) { showToast('✓ ' + data.message, 'success'); checkYouTubeStatus(); }
+    else showToast('Error: ' + data.error, 'error');
+  } catch(e) { showToast('Connection failed: ' + e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = 'Connect YouTube'; }
+}
+
+// ── TikTok ────────────────────────────────────────────────────────────────────
+async function checkTikTokStatus() {
+  try {
+    const res  = await fetch('/api/auth/tiktok/status');
+    const data = await res.json();
+    const label = document.getElementById('tt-status-label');
+    if (label) { label.textContent = data.authenticated ? '✓ Connected' : 'Not connected'; label.style.color = data.authenticated ? 'var(--kick)' : ''; }
+  } catch(e) {}
+}
+
+async function connectTikTokOAuth() {
+  try {
+    const res  = await fetch('/api/auth/tiktok/url');
+    const data = await res.json();
+    if (data.success) { window.open(data.url, '_blank'); showToast('Complete login in the browser tab.', 'info'); setTimeout(checkTikTokStatus, 5000); }
+    else showToast('Error: ' + data.error, 'error');
+  } catch(e) { showToast('Failed: ' + e.message, 'error'); }
+}
+
+function toggleManualToken() {
+  const el = document.getElementById('tt-manual-token');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function saveTikTokToken() {
+  const access  = document.getElementById('tiktok_access_token').value.trim();
+  const refresh = document.getElementById('tiktok_refresh_token').value.trim();
+  if (!access) { showToast('Access token is required', 'error'); return; }
+  const res  = await fetch('/api/auth/tiktok/token', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({access_token: access, refresh_token: refresh}),
+  });
+  const data = await res.json();
+  if (data.success) { showToast('✓ TikTok token saved', 'success'); document.getElementById('tt-manual-token').style.display='none'; checkTikTokStatus(); }
+  else showToast('Error: ' + data.error, 'error');
+}
+
+// ── Kick ──────────────────────────────────────────────────────────────────────
+async function checkKickStatus() {
+  try {
+    const res  = await fetch('/api/auth/kick/status');
+    const data = await res.json();
+    const label = document.getElementById('kick-status-label');
+    if (label) { label.textContent = data.authenticated ? '✓ Connected' : 'Not connected'; label.style.color = data.authenticated ? 'var(--kick)' : ''; }
+  } catch(e) {}
+}
+
+// ── X ─────────────────────────────────────────────────────────────────────────
+async function checkXStatus() {
+  try {
+    const res  = await fetch('/api/auth/x/status');
+    const data = await res.json();
+    const label = document.getElementById('x-status-label');
+    if (label) { label.textContent = data.authenticated ? '✓ Keys saved' : 'Not connected'; label.style.color = data.authenticated ? 'var(--kick)' : ''; }
+  } catch(e) {}
+}
+
+// ── Scheduler ─────────────────────────────────────────────────────────────────
+async function refreshSchedulerStatus() {
+  try {
+    const res  = await fetch('/api/scheduler/status');
+    const data = await res.json();
+    const label   = document.getElementById('sched-status-label');
+    const nextRun = document.getElementById('sched-next-run');
+    if (label)   { label.textContent = data.job_exists ? '✓ Running' : 'Stopped'; label.style.color = data.job_exists ? 'var(--kick)' : ''; }
+    if (nextRun) nextRun.textContent = data.next_run || '—';
+  } catch(e) {}
+}
+
+async function startScheduler() {
+  const hours = parseInt(document.getElementById('schedule_hours').value);
+  await fetch('/api/scheduler/start', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({interval_hours: hours})});
+  showToast(`✓ Scheduler started — every ${hours}h`, 'success');
+  refreshSchedulerStatus();
+}
+
+async function stopScheduler() {
+  await fetch('/api/scheduler/stop', {method:'POST'});
+  showToast('Scheduler stopped', 'info');
+  refreshSchedulerStatus();
+}
+
+async function runNow() {
+  await fetch('/api/scheduler/run-now', {method:'POST'});
+  showToast('⚡ Pipeline triggered!', 'success');
+  setTimeout(refreshSchedulerStatus, 2000);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  checkYouTubeStatus();
+  checkTikTokStatus();
+  checkKickStatus();
+  checkXStatus();
+  refreshSchedulerStatus();
+});
+</script>
+{% endblock %}

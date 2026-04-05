@@ -1,0 +1,14 @@
+*.pyc
+__pycache__/
+.env
+downloads/
+data/*.json
+*.db
+venv/
+dist/
+build/
+*.spec
+kick_token.json
+tiktok_token.json
+youtube_token.json
+client_secrets.json

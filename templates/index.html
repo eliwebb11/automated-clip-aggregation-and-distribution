@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}— Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block topbar_actions %}
+  <button class="btn btn-primary" onclick="fetchClips()">⬇ Fetch Clips</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- Quick-start banner -->
+<div class="quickstart">
+  <div class="quickstart-icon">🚀</div>
+  <div class="quickstart-body">
+    <div class="quickstart-title">Welcome to ClipSlop</div>
+    <div class="quickstart-desc">
+      Connect your Twitch &amp; Kick accounts in <a href="/settings" style="color:var(--accent)">Settings</a>,
+      then hit <strong>Fetch Clips</strong> to start building your upload pipeline.
+    </div>
+  </div>
+  <a href="/settings" class="btn btn-ghost">Configure →</a>
+</div>
+
+<!-- Stat cards -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Clips Fetched</div>
+    <div class="stat-value">{{ stats.clips_fetched }}</div>
+    <div class="stat-sub">all time</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Pending Review</div>
+    <div class="stat-value">{{ stats.pending_review }}</div>
+    <div class="stat-sub">awaiting approval</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Uploaded Today</div>
+    <div class="stat-value">{{ stats.uploaded_today }}</div>
+    <div class="stat-sub">across all platforms</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total Uploads</div>
+    <div class="stat-value">{{ stats.total_uploads }}</div>
+    <div class="stat-sub">YouTube + TikTok + X</div>
+  </div>
+</div>
+
+<!-- Scheduler status bar -->
+<div id="sched-bar" style="display:none;background:var(--bg-2);border:1px solid var(--border);
+     border-radius:var(--radius-lg);padding:14px 20px;margin-bottom:24px;
+     display:flex;align-items:center;gap:16px">
+  <div style="width:8px;height:8px;border-radius:50%;background:var(--kick);
+              box-shadow:0 0 6px var(--kick);flex-shrink:0" id="sched-dot"></div>
+  <div style="flex:1;font-size:13px;font-weight:600" id="sched-bar-label">Scheduler running</div>
+  <div style="font-size:11px;color:var(--text-3);font-family:var(--mono)" id="sched-bar-next"></div>
+  <button class="btn btn-ghost" style="font-size:11px;padding:6px 12px"
+          onclick="triggerRunNow()">⚡ Run Now</button>
+  <a href="/settings" class="btn btn-ghost" style="font-size:11px;padding:6px 12px">Configure →</a>
+</div>
+
+<!-- Bottom two-col -->
+<div class="two-col">
+
+  <!-- Recent Activity -->
+  <div>
+    <div class="section-header">
+      <span class="section-title">Recent Activity</span>
+    </div>
+    <div class="activity-feed" id="activity-feed">
+      <div class="activity-item">
+        <div class="activity-dot orange"></div>
+        <div class="activity-text"><strong>ClipSlop</strong> is ready. Configure your API keys to get started.</div>
+        <div class="activity-time">now</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Platform Status -->
+  <div>
+    <div class="section-header">
+      <span class="section-title">Platform Status</span>
+    </div>
+    <div class="activity-feed">
+      <div class="activity-item">
+        <div class="activity-dot purple"></div>
+        <div class="activity-text"><strong>Twitch</strong></div>
+        <span class="tag {{ 'tag-success' if twitch_ok else 'tag-pending' }}">{{ 'Connected' if twitch_ok else 'Not connected' }}</span>
+      </div>
+      <div class="activity-item">
+        <div class="activity-dot green"></div>
+        <div class="activity-text"><strong>Kick</strong></div>
+        <span class="tag tag-pending">Public API</span>
+      </div>
+      <div class="activity-item" id="yt-status-row">
+        <div class="activity-dot red"></div>
+        <div class="activity-text"><strong>YouTube</strong></div>
+        <span class="tag" id="yt-status-pill">Checking...</span>
+      </div>
+      <div class="activity-item">
+        <div class="activity-dot red"></div>
+        <div class="activity-text"><strong>TikTok</strong></div>
+        <span class="tag" id="tt-status-pill">Checking...</span>
+      </div>
+      <div class="activity-item">
+        <div class="activity-dot orange"></div>
+        <div class="activity-text"><strong>X</strong></div>
+        <span class="tag" id="x-status-pill">Checking...</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const res  = await fetch('/api/auth/youtube/status');
+    const data = await res.json();
+    const pill = document.getElementById('yt-status-pill');
+    if (pill) {
+      pill.textContent  = data.authenticated ? 'Connected' : 'Not connected';
+      pill.className    = 'tag ' + (data.authenticated ? 'tag-success' : 'tag-pending');
+    }
+  } catch(e) {}
+});
+
+async function triggerRunNow() {
+  await fetch('/api/scheduler/run-now', { method: 'POST' });
+  showToast('⚡ Pipeline triggered!', 'success');
+}
+</script>
+{% endblock %}

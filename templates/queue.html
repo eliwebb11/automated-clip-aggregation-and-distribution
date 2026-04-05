@@ -1,0 +1,352 @@
+{% extends "base.html" %}
+{% block title %}— Upload Queue{% endblock %}
+{% block page_title %}Upload Queue{% endblock %}
+{% block topbar_actions %}
+  {% if queue %}
+  <button class="btn btn-ghost" onclick="clearQueue()" style="margin-right:8px">✕ Clear Queue</button>
+  <button class="btn btn-primary" id="upload-all-btn" onclick="uploadAllYouTube()">▲ Upload All to YouTube</button>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+{% if queue %}
+  <div style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between">
+    <span style="font-size:13px;color:var(--text-3)">
+      {{ queue|length }} clip{{ 's' if queue|length != 1 }} ready to upload
+    </span>
+    <span id="yt-auth-status" style="font-size:12px;color:var(--text-3)">Checking YouTube...</span>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:16px;" id="queue-list">
+    {% for clip in queue %}
+    <div class="queue-card" id="qcard-{{ clip.id }}">
+
+      <!-- Thumbnail -->
+      <div class="queue-thumb">
+        {% if clip.thumbnail_url %}
+          <img src="{{ clip.thumbnail_url }}" alt="{{ clip.title }}"
+               style="width:100%;height:100%;object-fit:cover;border-radius:8px;"
+               onerror="this.style.display='none'">
+        {% else %}
+          <div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:28px;color:var(--text-3)">▷</div>
+        {% endif %}
+      </div>
+
+      <!-- Metadata editor -->
+      <div class="queue-meta">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span class="platform-pill {{ clip.source }}">{{ clip.source }}</span>
+          <span style="font-size:11px;color:var(--text-3);font-family:var(--mono)">
+            {{ clip.streamer }} · {{ clip.duration|int }}s · {{ "{:,}".format(clip.view_count) }} views
+          </span>
+        </div>
+
+        <div style="margin-bottom:8px">
+          <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:1px">Title</label>
+          <input class="form-input" type="text" id="title-{{ clip.id }}"
+                 value="{{ clip.upload_title or clip.title }}"
+                 style="margin-top:4px" oninput="markDirty({{ clip.id }})">
+        </div>
+
+        <div style="margin-bottom:8px">
+          <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:1px">Description</label>
+          <textarea class="form-input" id="desc-{{ clip.id }}" rows="2"
+                    style="margin-top:4px;resize:vertical;font-family:var(--mono);font-size:12px"
+                    oninput="markDirty({{ clip.id }})">{{ clip.upload_description or '' }}</textarea>
+        </div>
+
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:1px">Tags</label>
+          <input class="form-input" type="text" id="tags-{{ clip.id }}"
+                 value="{{ clip.upload_tags or '#Shorts #Gaming #Clips' }}"
+                 style="margin-top:4px" oninput="markDirty({{ clip.id }})">
+        </div>
+
+        <!-- Progress bar (hidden until upload starts) -->
+        <div id="progress-{{ clip.id }}" style="display:none;margin-top:10px">
+          <div style="height:3px;background:var(--bg-4);border-radius:99px;overflow:hidden">
+            <div id="progress-bar-{{ clip.id }}"
+                 style="height:100%;background:var(--youtube);width:0%;transition:width 0.3s ease;border-radius:99px"></div>
+          </div>
+          <div id="progress-label-{{ clip.id }}"
+               style="font-size:11px;color:var(--text-3);margin-top:4px;font-family:var(--mono)">
+            Preparing...
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="queue-actions">
+        <button class="btn btn-ghost" id="save-btn-{{ clip.id }}"
+                style="width:100%;opacity:0.4;cursor:default"
+                onclick="saveMetadata({{ clip.id }})">💾 Save</button>
+        <button class="btn btn-primary" id="yt-btn-{{ clip.id }}"
+                style="width:100%;font-size:12px"
+                onclick="uploadToYouTube({{ clip.id }})">
+          ▲ YouTube
+        </button>
+        <button class="btn btn-ghost" id="tt-btn-{{ clip.id }}"
+                style="width:100%;font-size:12px;border-color:rgba(255,45,85,0.3);color:var(--tiktok)"
+                onclick="uploadToTikTok({{ clip.id }})">
+          ▲ TikTok
+        </button>
+        <button class="btn btn-ghost" id="x-btn-{{ clip.id }}"
+                style="width:100%;font-size:12px;border-color:rgba(231,233,234,0.2);color:var(--x-color)"
+                onclick="uploadToX({{ clip.id }})">
+          ▲ X
+        </button>
+        <a href="{{ clip.clip_url }}" target="_blank"
+           class="btn btn-ghost" style="width:100%;text-align:center;font-size:12px">
+          ↗ View Clip
+        </a>
+        <button class="btn btn-danger" style="width:100%;font-size:12px"
+                onclick="removeFromQueue({{ clip.id }})">✕ Remove</button>
+      </div>
+
+    </div>
+    {% endfor %}
+  </div>
+
+{% else %}
+  <div class="empty-state">
+    <div class="empty-icon">📭</div>
+    <div class="empty-title">Queue is empty</div>
+    <div class="empty-desc">Approve clips from the Clips page and they'll appear here, ready to upload.</div>
+    <a href="/clips" class="btn btn-ghost">Browse Clips →</a>
+  </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Auth status ──────────────────────────────────────────────────────────
+async function checkYouTubeAuth() {
+  const label = document.getElementById('yt-auth-status');
+  if (!label) return;
+  try {
+    const [ytRes, ttRes] = await Promise.all([
+      fetch('/api/auth/youtube/status'),
+      fetch('/api/auth/tiktok/status'),
+    ]);
+    const yt = await ytRes.json();
+    const tt = await ttRes.json();
+    const xRes = await fetch('/api/auth/x/status');
+    const x     = await xRes.json();
+    const parts = [];
+    if (yt.authenticated) parts.push('✓ YouTube'); else parts.push('⚠ YouTube');
+    if (tt.authenticated) parts.push('✓ TikTok');  else parts.push('⚠ TikTok');
+    if (x.authenticated)  parts.push('✓ X');        else parts.push('⚠ X');
+    label.textContent = parts.join('  ·  ');
+    label.style.color = (yt.authenticated && tt.authenticated && x.authenticated) ? 'var(--kick)' : 'var(--accent)';
+  } catch (e) {
+    if (label) label.textContent = '';
+  }
+}
+
+// ── Metadata helpers ─────────────────────────────────────────────────────
+function markDirty(id) {
+  const btn = document.getElementById(`save-btn-${id}`);
+  btn.style.opacity = '1';
+  btn.style.cursor  = 'pointer';
+}
+
+async function saveMetadata(id) {
+  const payload = {
+    upload_title:       document.getElementById(`title-${id}`).value,
+    upload_description: document.getElementById(`desc-${id}`).value,
+    upload_tags:        document.getElementById(`tags-${id}`).value,
+  };
+  const res  = await fetch(`/api/clip/${id}/metadata`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (data.success) {
+    document.getElementById(`save-btn-${id}`).style.opacity = '0.4';
+    document.getElementById(`save-btn-${id}`).style.cursor  = 'default';
+    showToast('✓ Metadata saved', 'success');
+  }
+}
+
+// ── YouTube upload ────────────────────────────────────────────────────────
+async function uploadToYouTube(id) {
+  // Auto-save metadata first
+  await saveMetadata(id);
+
+  const btn      = document.getElementById(`yt-btn-${id}`);
+  const progress = document.getElementById(`progress-${id}`);
+  const bar      = document.getElementById(`progress-bar-${id}`);
+  const plabel   = document.getElementById(`progress-label-${id}`);
+
+  btn.disabled    = true;
+  btn.textContent = '⏳ Uploading...';
+  progress.style.display = 'block';
+
+  // Animate indeterminate progress while uploading
+  let pct = 0;
+  const ticker = setInterval(() => {
+    pct = Math.min(pct + Math.random() * 4, 88);
+    bar.style.width    = pct + '%';
+    plabel.textContent = pct < 30 ? 'Downloading clip...' : pct < 70 ? 'Uploading to YouTube...' : 'Finalising...';
+  }, 600);
+
+  try {
+    const res  = await fetch(`/api/upload/youtube/${id}`, { method: 'POST' });
+    const data = await res.json();
+    clearInterval(ticker);
+
+    if (data.success) {
+      bar.style.width    = '100%';
+      bar.style.background = 'var(--kick)';
+      plabel.textContent = '✓ Uploaded!';
+      btn.textContent    = '✓ Done';
+      btn.style.background = 'rgba(83,252,24,0.15)';
+      btn.style.color    = 'var(--kick)';
+      showToast(`✓ Uploaded to YouTube Shorts!`, 'success');
+    } else {
+      bar.style.background = '#ef4444';
+      bar.style.width    = '100%';
+      plabel.textContent = '✕ ' + (data.error || 'Upload failed');
+      btn.disabled       = false;
+      btn.textContent    = '↺ Retry';
+      showToast('Upload failed: ' + (data.error || 'unknown error'), 'error');
+    }
+  } catch (e) {
+    clearInterval(ticker);
+    plabel.textContent = '✕ Network error';
+    btn.disabled       = false;
+    btn.textContent    = '↺ Retry';
+    showToast('Upload failed: ' + e.message, 'error');
+  }
+}
+
+async function uploadAllYouTube() {
+  const btn = document.getElementById('upload-all-btn');
+  btn.disabled    = true;
+  btn.textContent = '⏳ Uploading all...';
+  try {
+    const res  = await fetch('/api/upload/youtube/all', { method: 'POST' });
+    const data = await res.json();
+    showToast(`✓ ${data.uploaded} uploaded, ${data.failed} failed`, data.failed > 0 ? 'error' : 'success');
+    setTimeout(() => location.reload(), 1500);
+  } catch (e) {
+    showToast('Upload all failed: ' + e.message, 'error');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = '▲ Upload All to YouTube';
+  }
+}
+
+async function removeFromQueue(id) {
+  const res  = await fetch(`/api/clip/${id}/remove-queue`, { method: 'POST' });
+  const data = await res.json();
+  if (data.success) {
+    const card = document.getElementById(`qcard-${id}`);
+    card.style.opacity   = '0';
+    card.style.transform = 'translateX(20px)';
+    card.style.transition= 'all 0.25s ease';
+    setTimeout(() => { card.remove(); if (!document.querySelector('.queue-card')) location.reload(); }, 300);
+    showToast('Clip removed from queue', 'info');
+  }
+}
+
+async function clearQueue() {
+  if (!confirm('Remove all clips from the queue?')) return;
+  const res  = await fetch('/api/queue/clear', { method: 'POST' });
+  const data = await res.json();
+  if (data.success) {
+    showToast(`Cleared ${data.cleared} clip${data.cleared !== 1 ? 's' : ''} from queue`, 'info');
+    setTimeout(() => location.reload(), 800);
+  }
+}
+
+async function uploadToTikTok(id) {
+  await saveMetadata(id);
+  const btn    = document.getElementById(`tt-btn-${id}`);
+  const bar    = document.getElementById(`progress-bar-${id}`);
+  const plabel = document.getElementById(`progress-label-${id}`);
+  const prog   = document.getElementById(`progress-${id}`);
+
+  btn.disabled    = true;
+  btn.textContent = '⏳ TikTok...';
+  if (prog) prog.style.display = 'block';
+
+  let pct = 0;
+  const ticker = setInterval(() => {
+    pct = Math.min(pct + Math.random() * 4, 88);
+    if (bar) bar.style.width = pct + '%';
+    if (plabel) plabel.textContent = pct < 40 ? 'Downloading clip...' : 'Uploading to TikTok...';
+  }, 600);
+
+  try {
+    const res  = await fetch(`/api/upload/tiktok/${id}`, { method: 'POST' });
+    const data = await res.json();
+    clearInterval(ticker);
+    if (data.success) {
+      if (bar)    { bar.style.width = '100%'; bar.style.background = 'var(--tiktok)'; }
+      if (plabel) plabel.textContent = '✓ Sent to TikTok!';
+      btn.textContent   = '✓ TikTok Done';
+      btn.style.color   = 'var(--tiktok)';
+      showToast('✓ Uploaded to TikTok!', 'success');
+    } else {
+      if (bar)    { bar.style.width = '100%'; bar.style.background = '#ef4444'; }
+      if (plabel) plabel.textContent = '✕ ' + (data.error || 'Failed');
+      btn.disabled    = false;
+      btn.textContent = '↺ Retry TikTok';
+      showToast('TikTok upload failed: ' + (data.error || 'unknown'), 'error');
+    }
+  } catch (e) {
+    clearInterval(ticker);
+    btn.disabled    = false;
+    btn.textContent = '↺ Retry TikTok';
+    showToast('TikTok upload failed: ' + e.message, 'error');
+  }
+}
+
+async function uploadToX(id) {
+  await saveMetadata(id);
+  const btn    = document.getElementById(`x-btn-${id}`);
+  const bar    = document.getElementById(`progress-bar-${id}`);
+  const plabel = document.getElementById(`progress-label-${id}`);
+  const prog   = document.getElementById(`progress-${id}`);
+
+  btn.disabled    = true;
+  btn.textContent = '⏳ X...';
+  if (prog) prog.style.display = 'block';
+
+  let pct = 0;
+  const ticker = setInterval(() => {
+    pct = Math.min(pct + Math.random() * 3, 85);
+    if (bar)    bar.style.width    = pct + '%';
+    if (plabel) plabel.textContent = pct < 30 ? 'Downloading clip...' : pct < 60 ? 'Uploading to X...' : 'Processing video...';
+  }, 800);
+
+  try {
+    const res  = await fetch(`/api/upload/x/${id}`, { method: 'POST' });
+    const data = await res.json();
+    clearInterval(ticker);
+    if (data.success) {
+      if (bar)    { bar.style.width = '100%'; bar.style.background = 'var(--x-color)'; }
+      if (plabel) plabel.textContent = '✓ Posted to X!';
+      btn.textContent = '✓ X Done';
+      btn.style.color = 'var(--x-color)';
+      showToast('✓ Posted to X!', 'success');
+    } else {
+      if (bar)    { bar.style.width = '100%'; bar.style.background = '#ef4444'; }
+      if (plabel) plabel.textContent = '✕ ' + (data.error || 'Failed');
+      btn.disabled    = false;
+      btn.textContent = '↺ Retry X';
+      showToast('X upload failed: ' + (data.error || 'unknown'), 'error');
+    }
+  } catch(e) {
+    clearInterval(ticker);
+    btn.disabled    = false;
+    btn.textContent = '↺ Retry X';
+    showToast('X upload failed: ' + e.message, 'error');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', checkYouTubeAuth);
+</script>
+{% endblock %}

@@ -1,0 +1,90 @@
+{% if clips %}
+  <div style="margin-bottom:16px; font-size:13px; color:var(--text-3)">
+    {{ clips|length }} clip{{ 's' if clips|length != 1 }} fetched
+  </div>
+  <div class="clips-grid">
+    {% for clip in clips %}
+    <div class="clip-card" id="clip-{{ clip.id }}">
+
+      <div class="clip-thumb">
+        {% if clip.thumbnail_url %}
+          <img src="{{ clip.thumbnail_url }}" alt="{{ clip.title }}"
+               style="width:100%;height:100%;object-fit:cover;"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+          <div style="display:none;align-items:center;justify-content:center;width:100%;height:100%;font-size:32px">▷</div>
+        {% else %}
+          ▷
+        {% endif %}
+      </div>
+
+      <div style="padding:10px 14px 0; display:flex; align-items:center; justify-content:space-between">
+        <span class="platform-pill {{ clip.source }}">{{ clip.source }}</span>
+        <span class="clip-status-badge tag {% if clip.status == 'approved' %}tag-success{% elif clip.status == 'skipped' %}tag-error{% else %}tag-pending{% endif %}">
+          {{ clip.status }}
+        </span>
+      </div>
+
+      <div class="clip-info">
+        <div class="clip-title">{{ clip.title }}</div>
+        <div class="clip-meta">
+          {{ clip.streamer }} &middot; {{ clip.game }} &middot; {{ "{:,}".format(clip.view_count) }} views &middot; {{ clip.duration|int }}s
+        </div>
+      </div>
+
+      {% if clip.status == 'pending' %}
+      <div class="clip-actions" style="display:flex;gap:8px;padding:0 14px 14px">
+        <button class="btn btn-primary" style="flex:1;font-size:12px;padding:7px"
+                onclick="approveClip({{ clip.id }})">✓ Approve</button>
+        <button class="btn btn-danger" style="flex:1;font-size:12px;padding:7px"
+                onclick="rejectClip({{ clip.id }})">✕ Reject</button>
+      </div>
+      {% elif clip.status == 'approved' %}
+      <div class="clip-actions" style="padding:0 14px 14px">
+        <a href="/queue" class="btn btn-ghost" style="width:100%;font-size:12px;padding:7px;text-align:center;display:block">
+          View in Queue →
+        </a>
+      </div>
+      {% endif %}
+
+    </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="empty-state">
+    <div class="empty-icon">🎬</div>
+    <div class="empty-title">No clips yet</div>
+    <div class="empty-desc">
+      Add your Twitch games and Kick categories in
+      <a href="/settings" style="color:var(--accent)">Settings</a>,
+      then hit Fetch Clips.
+    </div>
+    <button class="btn btn-primary" onclick="fetchClips()">⬇ Fetch Clips</button>
+  </div>
+{% endif %}
+<script>
+async function approveClip(id) {
+  const res = await fetch(`/api/clip/${id}/approve`, { method: 'POST' });
+  const data = await res.json();
+  if (data.success) {
+    const card = document.getElementById(`clip-${id}`);
+    card.querySelector('.clip-status-badge').className = 'clip-status-badge tag tag-success';
+    card.querySelector('.clip-status-badge').textContent = 'approved';
+    const actions = card.querySelector('.clip-actions');
+    if (actions) actions.innerHTML = `<a href="/queue" class="btn btn-ghost" style="width:100%;font-size:12px;padding:7px;text-align:center;display:block">View in Queue →</a>`;
+    showToast('✓ Clip approved and added to queue', 'success');
+  }
+}
+
+async function rejectClip(id) {
+  const res = await fetch(`/api/clip/${id}/reject`, { method: 'POST' });
+  const data = await res.json();
+  if (data.success) {
+    const card = document.getElementById(`clip-${id}`);
+    card.querySelector('.clip-status-badge').className = 'clip-status-badge tag tag-error';
+    card.querySelector('.clip-status-badge').textContent = 'skipped';
+    const actions = card.querySelector('.clip-actions');
+    if (actions) actions.remove();
+    showToast('Clip rejected', 'info');
+  }
+}
+</script>

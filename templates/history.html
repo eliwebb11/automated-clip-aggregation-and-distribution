@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}— History{% endblock %}
+{% block page_title %}Upload History{% endblock %}
+
+{% block content %}
+{% if history %}
+  <div style="margin-bottom:20px; font-size:13px; color:var(--text-3)">
+    {{ history|length }} upload{{ 's' if history|length != 1 }}
+  </div>
+
+  <div class="activity-feed">
+    {% for clip in history %}
+    <div class="activity-item" style="gap:16px">
+
+      <!-- Thumb -->
+      <div style="width:60px;height:34px;border-radius:4px;overflow:hidden;flex-shrink:0;background:var(--bg-4)">
+        {% if clip.thumbnail_url %}
+          <img src="{{ clip.thumbnail_url }}" style="width:100%;height:100%;object-fit:cover">
+        {% else %}
+          <div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:14px;color:var(--text-3)">▷</div>
+        {% endif %}
+      </div>
+
+      <!-- Info -->
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          {{ clip.upload_title or clip.title }}
+        </div>
+        <div style="font-size:11px;color:var(--text-3);font-family:var(--mono);margin-top:2px">
+          {{ clip.streamer }} · {{ clip.source }}
+        </div>
+      </div>
+
+      <!-- Platforms uploaded to -->
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        {% for log in clip.uploads %}
+          <span class="platform-pill {{ 'youtube' if log.destination == 'youtube' else 'tiktok' if log.destination == 'tiktok' else 'x' }}"
+                style="font-size:10px">
+            {{ log.destination }}
+            {% if log.status == 'success' %} ✓{% else %} ✕{% endif %}
+          </span>
+        {% endfor %}
+      </div>
+
+      <!-- Status + date -->
+      <div style="text-align:right;flex-shrink:0">
+        <span class="tag {% if clip.status == 'done' %}tag-success{% else %}tag-error{% endif %}">
+          {{ clip.status }}
+        </span>
+        <div style="font-size:11px;color:var(--text-3);margin-top:4px;font-family:var(--mono)">
+          {{ clip.fetched_at.strftime('%b %d, %H:%M') if clip.fetched_at else '—' }}
+        </div>
+      </div>
+
+    </div>
+    {% endfor %}
+  </div>
+
+{% else %}
+  <div class="empty-state">
+    <div class="empty-icon">◷</div>
+    <div class="empty-title">No uploads yet</div>
+    <div class="empty-desc">Your upload history will appear here once you've pushed your first batch of clips.</div>
+  </div>
+{% endif %}
+{% endblock %}
