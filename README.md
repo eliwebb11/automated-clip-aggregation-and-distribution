@@ -2,6 +2,10 @@
 
 A desktop app that automatically fetches top clips from Twitch and Kick and uploads them to YouTube Shorts, TikTok, and X (Twitter).
 
+
+https://github.com/user-attachments/assets/8649fbd1-a258-4eb8-9ed4-14a530aaac85
+
+
 ---
 
 ## What it does
